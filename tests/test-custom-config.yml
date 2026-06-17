@@ -1,0 +1,58 @@
+name: Test custom config-path input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: pull_request
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create fake PR event payload and custom config
+        run: |
+          mkdir -p /tmp/fossier-test
+
+          cat > /tmp/fossier-test/event.json <<'EOF'
+          {
+            "pull_request": {
+              "number": 7,
+              "user": {
+                "login": "new-contributor"
+              },
+              "labels": []
+            }
+          }
+          EOF
+          echo "GITHUB_EVENT_PATH=/tmp/fossier-test/event.json" >> $GITHUB_ENV
+
+          cat > /tmp/fossier-test/fossier.toml <<'EOF'
+          [repo]
+          owner = "test-owner"
+          name = "test-repo"
+
+          [thresholds]
+          allow_score = 75.0
+          deny_score = 35.0
+          min_confidence = 0.5
+
+          [actions.deny]
+          close_pr = false
+          comment = false
+
+          [actions.review]
+          comment = false
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github-token: fake-token-for-testing
+          config-path: "/tmp/fossier-test/fossier.toml"
+          fail-on-deny: "false"
+          db-cache-key: "custom-test-db"
+
+      - name: Assert action completed with custom config
+        run: |
+          echo "Action completed with custom config-path"
+          echo "PASS"

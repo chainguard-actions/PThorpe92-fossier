@@ -1,0 +1,42 @@
+name: Test issue_comment event without fossier command - exits cleanly
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: issue_comment
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create fake issue_comment event payload (no /fossier command)
+        run: |
+          mkdir -p /tmp/fossier-test
+          cat > /tmp/fossier-test/event.json <<'EOF'
+          {
+            "issue": {
+              "number": 10,
+              "pull_request": {
+                "url": "https://api.github.com/repos/owner/repo/pulls/10"
+              }
+            },
+            "comment": {
+              "body": "Great work on this PR! Looks good to me.",
+              "user": {
+                "login": "reviewer"
+              }
+            }
+          }
+          EOF
+          echo "GITHUB_EVENT_PATH=/tmp/fossier-test/event.json" >> $GITHUB_ENV
+
+      - id: action
+        uses: .
+        with:
+          github-token: fake-token-for-testing
+          fail-on-deny: "false"
+
+      - name: Assert action completed without failure
+        run: |
+          echo "Action handled issue_comment with no /fossier command cleanly"
+          echo "PASS"

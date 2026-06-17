@@ -1,0 +1,38 @@
+name: Test fail-on-deny false - action never fails the step
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: pull_request
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create fake PR event payload
+        run: |
+          mkdir -p /tmp/fossier-test
+          cat > /tmp/fossier-test/event.json <<'EOF'
+          {
+            "pull_request": {
+              "number": 99,
+              "user": {
+                "login": "suspicious-user"
+              },
+              "labels": []
+            }
+          }
+          EOF
+          echo "GITHUB_EVENT_PATH=/tmp/fossier-test/event.json" >> $GITHUB_ENV
+
+      - id: action
+        uses: .
+        with:
+          github-token: fake-token-for-testing
+          fail-on-deny: "false"
+          contact-url: "https://example.com/contact"
+
+      - name: Assert step did not fail
+        run: |
+          echo "Step completed without failure as expected when fail-on-deny=false"
+          echo "PASS"
