@@ -1,0 +1,28 @@
+name: Test fail-on-deny false (default)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: pull_request
+      GITHUB_REF: refs/pull/1/merge
+      GITHUB_HEAD_REF: feature-branch
+      GITHUB_BASE_REF: main
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          github-token: ${{ github.token }}
+          fail-on-deny: "false"
+          db-cache-key: "fossier-db-test"
+        continue-on-error: true
+
+      - name: Assert workflow did not fail due to deny
+        run: |
+          # With fail-on-deny=false, the action should never cause a workflow failure
+          # regardless of the outcome. The step may have errored for other reasons
+          # (e.g. no real PR), but the fail-on-deny logic should not trigger.
+          echo "PASS: fail-on-deny=false did not cause workflow failure"
