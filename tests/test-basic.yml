@@ -1,0 +1,31 @@
+name: Test basic usage - fail-on-deny false
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: pull_request
+      GITHUB_REF: refs/pull/1/merge
+      GITHUB_HEAD_REF: feature-branch
+      GITHUB_BASE_REF: main
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          github-token: ${{ github.token }}
+          fail-on-deny: "false"
+        continue-on-error: true
+
+      - name: Assert action completed without hard failure
+        run: |
+          echo "Action step outcome: ${{ steps.action.outcome }}"
+          # With fail-on-deny: false, the action should always exit 0
+          # even if fossier cannot reach the GitHub API or finds no PR
+          if [ "${{ steps.action.outcome }}" = "failure" ]; then
+            echo "FAIL: action failed unexpectedly with fail-on-deny=false"
+            exit 1
+          fi
+          echo "PASS: action completed successfully"
