@@ -8,6 +8,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
+| v0.0.1 | [`v0.0.1`](https://github.com/chainguard-actions/PThorpe92-fossier/tree/v0.0.1) | [`1d6f2ca`](https://github.com/PThorpe92/fossier/commit/1d6f2caa675162275efd8a5d05d5005db08f259a) |
 | v0.0.5 | [`v0.0.5`](https://github.com/chainguard-actions/PThorpe92-fossier/tree/v0.0.5) | [`55e7dd2`](https://github.com/PThorpe92/fossier/commit/55e7dd21039e405fbad7c43ac6f3bef42e308836) |
 
 ## Privacy
