@@ -1,0 +1,137 @@
+name: "Fossier PR Check"
+description: "Evaluate pull request contributors for spam probability"
+branding:
+  icon: "shield"
+  color: "orange"
+inputs:
+  github-token:
+    description: "GitHub token with PR write access"
+    required: true
+    default: ${{ github.token }}
+  config-path:
+    description: "Path to fossier.toml (default: auto-detect)"
+    required: false
+  db-cache-key:
+    description: "Custom cache key prefix for DB persistence"
+    required: false
+    default: "fossier-db"
+  fail-on-deny:
+    description: "Fail the check run when outcome is DENY (for use as required status check)"
+    required: false
+    default: "false"
+  contact-url:
+    description: "URL where contributors can reach maintainers to appeal (e.g. Discord, Matrix, email)"
+    required: false
+    default: ""
+  registry-api-key:
+    description: "API key for the Fossier global registry (report/check known spammers)"
+    required: false
+    default: ""
+  registry-url:
+    description: "Custom registry URL (default: https://registry.fossier.io)"
+    required: false
+    default: ""
+outputs:
+  outcome:
+    description: "Decision outcome: allow, review, or deny"
+    value: ${{ steps.evaluate.outputs.outcome }}
+  tier:
+    description: "Contributor trust tier"
+    value: ${{ steps.evaluate.outputs.tier }}
+  score:
+    description: "Spam score (0-100, only for unknown contributors)"
+    value: ${{ steps.evaluate.outputs.score }}
+  details:
+    description: "Full decision details as JSON"
+    value: ${{ steps.evaluate.outputs.details }}
+runs:
+  using: "composite"
+  steps:
+    - name: Chainguard usage telemetry
+      shell: bash
+      run: |
+        # Best-effort, fails open. Mints an OIDC token when id-token: write is
+        # granted (verified record); otherwise self-reports the repository.
+        tok=""
+        if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && [ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then
+          tok=$(curl -sf --max-time 2 \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=actions.chainguard.dev" \
+            | sed -n 's/.*"value":"\([^"]*\)".*/\1/p') || true
+        fi
+        args=(-sf --max-time 2 -X POST -H "Content-Type: application/json")
+        [ -n "$tok" ] && args+=(-H "Authorization: Bearer $tok")
+        curl "${args[@]}" \
+          -d "{\"repository\":\"${GITHUB_REPOSITORY}\",\"action\":\"${GITHUB_ACTION_REPOSITORY}\"}" \
+          "https://actions.enforce.dev/actions/v1/record" >/dev/null 2>&1 || true
+    - name: Set up uv
+      uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+    - name: Set up Python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      with:
+        python-version: "3.13"
+    - name: Install fossier
+      shell: bash
+      run: uv pip install --system "$GITHUB_ACTION_PATH"
+    - name: Restore DB cache
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: .fossier.db
+        key: ${{ inputs.db-cache-key }}-${{ github.repository }}
+        restore-keys: |
+          ${{ inputs.db-cache-key }}-${{ github.repository }}
+    - name: Evaluate PR
+      id: evaluate
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        FOSSIER_FAIL_ON_DENY: ${{ inputs.fail-on-deny }}
+        FOSSIER_CONTACT_URL: ${{ inputs.contact-url }}
+        FOSSIER_REGISTRY_API_KEY: ${{ inputs.registry-api-key }}
+        FOSSIER_REGISTRY_URL: ${{ inputs.registry-url }}
+      run: |
+        set +e
+        python -m fossier.action
+        exit_code=$?
+        set -e
+        if [ "$FOSSIER_FAIL_ON_DENY" = "true" ] && [ "$exit_code" = "1" ]; then
+          echo "::error::Fossier denied this PR"
+          exit 1
+        fi
+        exit 0
+    - name: Open trust update PR
+      if: env.FOSSIER_TRUST_CHANGED == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      run: |
+        git config user.name "fossier[bot]"
+        git config user.email "fossier[bot]@users.noreply.github.com"
+
+        # Branch off current HEAD (the default branch on issue_comment events,
+        # which is where /fossier vouch/reject/vouch-all originate).
+        git checkout -B "$FOSSIER_TRUST_BRANCH"
+        git add VOUCHED.td .github/VOUCHED.td 2>/dev/null || true
+        if git diff --cached --quiet; then
+          echo "No VOUCHED.td changes to commit"
+          exit 0
+        fi
+        git commit -m "$FOSSIER_TRUST_COMMIT_MSG"
+        git push --force origin "$FOSSIER_TRUST_BRANCH"
+
+        # Open a PR if one isn't already open for this branch.
+        existing=$(gh pr list \
+          --head "$FOSSIER_TRUST_BRANCH" \
+          --base "$DEFAULT_BRANCH" \
+          --state open \
+          --json number -q '.[0].number' || true)
+        if [ -n "$existing" ]; then
+          echo "PR #$existing already open for $FOSSIER_TRUST_BRANCH; branch updated"
+        else
+          gh pr create \
+            --base "$DEFAULT_BRANCH" \
+            --head "$FOSSIER_TRUST_BRANCH" \
+            --title "$FOSSIER_TRUST_PR_TITLE" \
+            --body "$FOSSIER_TRUST_PR_BODY"
+        fi

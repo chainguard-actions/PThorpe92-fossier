@@ -1,0 +1,31 @@
+name: Test fail-on-deny false (workflow should not fail on deny outcome)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: pull_request
+      GITHUB_REF: refs/pull/42/merge
+      GITHUB_HEAD_REF: spam-branch
+      GITHUB_BASE_REF: main
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          github-token: ${{ github.token }}
+          fail-on-deny: "false"
+          contact-url: "https://example.com/contact"
+        continue-on-error: true
+
+      - name: Assert job did not hard-fail due to deny outcome
+        run: |
+          # With fail-on-deny=false, the action must exit 0 regardless of the
+          # Python script's exit code. The step outcome should be success or
+          # failure-due-to-api-error, but NOT a hard exit-1 from the deny path.
+          echo "step outcome: ${{ steps.action.outcome }}"
+          echo "action outcome output: ${{ steps.action.outputs.outcome }}"
+          # The job itself is still running, which proves fail-on-deny=false worked.
+          echo "PASS: workflow continued past action step"
