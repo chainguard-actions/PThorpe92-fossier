@@ -1,0 +1,25 @@
+name: Test fail-on-deny option (no PR event — should still exit 0)
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # With fail-on-deny=true, the action only fails when python exits with code 1
+      # (DENY outcome). Under workflow_dispatch there is no PR, so python exits 3
+      # (missing PR info), and the shell script exits 0 regardless.
+      - id: action
+        uses: .
+        with:
+          github-token: ${{ github.token }}
+          fail-on-deny: "true"
+          contact-url: "https://example.com/contact"
+          db-cache-key: "test-fossier-db"
+
+      - name: Assert action completed without error
+        run: |
+          echo "Action completed with fail-on-deny=true and no PR event — expected exit 0"
+          echo "PASS"

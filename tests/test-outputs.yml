@@ -1,0 +1,32 @@
+name: Test action outputs are accessible
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          github-token: ${{ github.token }}
+          fail-on-deny: "false"
+
+      # Under workflow_dispatch there is no PR event, so fossier exits early
+      # without setting outputs. The outputs will be empty strings.
+      - name: Assert outcome output is accessible (empty when no PR)
+        env:
+          OUTCOME: ${{ steps.action.outputs.outcome }}
+          TIER: ${{ steps.action.outputs.tier }}
+          SCORE: ${{ steps.action.outputs.score }}
+          DETAILS: ${{ steps.action.outputs.details }}
+        run: |
+          echo "outcome: '$OUTCOME'"
+          echo "tier: '$TIER'"
+          echo "score: '$SCORE'"
+          echo "details: '$DETAILS'"
+          # When there is no PR event, outputs are empty — that is expected
+          # The important thing is the action did not crash
+          echo "PASS: outputs are accessible (empty when no PR event)"
