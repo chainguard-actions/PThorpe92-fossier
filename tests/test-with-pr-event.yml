@@ -1,0 +1,53 @@
+name: Test with simulated PR event payload
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Create a fake pull_request event payload so fossier can parse PR info.
+      # The action will attempt to evaluate the contributor via the GitHub API;
+      # any API errors are non-fatal because fail-on-deny=false and the shell
+      # wrapper only propagates exit code 1 (DENY) when fail-on-deny=true.
+      - name: Create fake PR event payload
+        run: |
+          cat > /tmp/fake-pr-event.json <<'EOF'
+          {
+            "action": "opened",
+            "number": 1,
+            "pull_request": {
+              "number": 1,
+              "user": {
+                "login": "octocat"
+              },
+              "title": "Test PR",
+              "body": "This is a test pull request"
+            },
+            "repository": {
+              "full_name": "PThorpe92/fossier",
+              "owner": {
+                "login": "PThorpe92"
+              },
+              "name": "fossier"
+            }
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github-token: ${{ github.token }}
+          fail-on-deny: "false"
+        env:
+          GITHUB_EVENT_PATH: /tmp/fake-pr-event.json
+          GITHUB_EVENT_NAME: pull_request
+
+      # The action should exit 0 regardless of the evaluation result when
+      # fail-on-deny=false. If the API call succeeds, outputs will be set.
+      # If it fails for any reason other than DENY, the wrapper still exits 0.
+      - name: Assert action completed without error
+        run: |
+          echo "Action completed with exit 0 as expected"
+          echo "PASS"

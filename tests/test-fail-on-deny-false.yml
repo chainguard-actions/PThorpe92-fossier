@@ -1,0 +1,23 @@
+name: Test fail-on-deny false does not fail
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          github-token: ${{ github.token }}
+          fail-on-deny: "false"
+          contact-url: "https://example.com/contact"
+
+      # With fail-on-deny=false the action must always exit 0, regardless of
+      # the fossier evaluation result (or lack of PR context under
+      # workflow_dispatch which causes fossier to exit 3).
+      - name: Assert step did not fail
+        run: |
+          echo "Step completed with exit 0 as expected when fail-on-deny=false"
+          echo "PASS"

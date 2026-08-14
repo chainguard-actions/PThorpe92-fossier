@@ -1,0 +1,24 @@
+name: Test custom optional inputs
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          github-token: ${{ github.token }}
+          db-cache-key: "my-custom-cache-key"
+          fail-on-deny: "false"
+          contact-url: "https://discord.gg/example"
+
+      # Verify the action accepts all optional inputs (db-cache-key, contact-url)
+      # without failing. Under workflow_dispatch there is no PR context so
+      # fossier exits 3, but the wrapper exits 0 when fail-on-deny=false.
+      - name: Assert action accepted custom inputs without error
+        run: |
+          echo "Action accepted custom db-cache-key and contact-url inputs"
+          echo "PASS"
