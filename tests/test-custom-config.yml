@@ -1,0 +1,42 @@
+name: Test custom config-path input
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create custom fossier config
+        run: |
+          mkdir -p /tmp/fossier-config
+          cat > /tmp/fossier-config/fossier.toml <<'EOF'
+          [repo]
+          owner = "test-owner"
+          name = "test-repo"
+
+          [thresholds]
+          allow_score = 70.0
+          deny_score = 40.0
+          min_confidence = 0.5
+
+          [actions.deny]
+          close_pr = false
+          comment = false
+
+          [actions.review]
+          comment = false
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          github-token: ${{ github.token }}
+          config-path: "/tmp/fossier-config/fossier.toml"
+          fail-on-deny: "false"
+
+      - name: Assert action completed with custom config
+        run: |
+          echo "Action completed with custom config-path without error"
+          echo "PASS"

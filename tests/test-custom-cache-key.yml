@@ -1,4 +1,4 @@
-name: Test fail-on-deny false (action does not fail)
+name: Test custom db-cache-key input
 on:
   workflow_dispatch:
 
@@ -12,10 +12,10 @@ jobs:
         uses: .
         with:
           github-token: ${{ github.token }}
+          db-cache-key: "my-custom-fossier-db"
           fail-on-deny: "false"
-          contact-url: "https://example.com/contact"
 
-      - name: Assert action did not fail
+      - name: Assert action completed with custom cache key
         run: |
-          echo "Action completed without failure as expected (fail-on-deny=false)"
+          echo "Action completed with custom db-cache-key without error"
           echo "PASS"
