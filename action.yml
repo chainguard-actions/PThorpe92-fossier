@@ -65,16 +65,18 @@ runs:
           -d "{\"repository\":\"${GITHUB_REPOSITORY}\",\"action\":\"${GITHUB_ACTION_REPOSITORY}\"}" \
           "https://actions.enforce.dev/actions/v1/record" >/dev/null 2>&1 || true
     - name: Set up uv
-      uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+      uses: chainguard-actions/astral-sh-setup-uv@0462e4edaa6724d4bec2ac410fd8fc5ddf4865e2 # v4
     - name: Set up Python
-      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      uses: chainguard-actions/actions-setup-python@ace3254bb5011efbd0650a7120a0441ebd1f9400 # v5
       with:
         python-version: "3.13"
     - name: Install fossier
       shell: bash
-      run: uv pip install --system "$GITHUB_ACTION_PATH"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: uv pip install --system "$ACTION_PATH"
     - name: Restore DB cache
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      uses: chainguard-actions/actions-cache@1a492a110f951652a0d2d3327bc20ee36867788e # v4
       with:
         path: .fossier.db
         key: ${{ inputs.db-cache-key }}-${{ github.repository }}
@@ -109,29 +111,37 @@ runs:
         git config user.name "fossier[bot]"
         git config user.email "fossier[bot]@users.noreply.github.com"
 
+        # Sanitize FOSSIER_TRUST_* values (set via $GITHUB_ENV by the Python
+        # action) to strip any residual newlines before using them in shell
+        # commands, preventing environment-variable injection attacks.
+        SAFE_BRANCH=$(printf '%s' "$FOSSIER_TRUST_BRANCH" | tr -d '\n\r')
+        SAFE_COMMIT_MSG=$(printf '%s' "$FOSSIER_TRUST_COMMIT_MSG" | tr -d '\n\r')
+        SAFE_PR_TITLE=$(printf '%s' "$FOSSIER_TRUST_PR_TITLE" | tr -d '\n\r')
+        SAFE_PR_BODY=$(printf '%s' "$FOSSIER_TRUST_PR_BODY" | tr -d '\n\r')
+
         # Branch off current HEAD (the default branch on issue_comment events,
         # which is where /fossier vouch/reject/vouch-all originate).
-        git checkout -B "$FOSSIER_TRUST_BRANCH"
+        git checkout -B "$SAFE_BRANCH"
         git add VOUCHED.td .github/VOUCHED.td 2>/dev/null || true
         if git diff --cached --quiet; then
           echo "No VOUCHED.td changes to commit"
           exit 0
         fi
-        git commit -m "$FOSSIER_TRUST_COMMIT_MSG"
-        git push --force origin "$FOSSIER_TRUST_BRANCH"
+        git commit -m "$SAFE_COMMIT_MSG"
+        git push --force origin "$SAFE_BRANCH"
 
         # Open a PR if one isn't already open for this branch.
         existing=$(gh pr list \
-          --head "$FOSSIER_TRUST_BRANCH" \
+          --head "$SAFE_BRANCH" \
           --base "$DEFAULT_BRANCH" \
           --state open \
           --json number -q '.[0].number' || true)
         if [ -n "$existing" ]; then
-          echo "PR #$existing already open for $FOSSIER_TRUST_BRANCH; branch updated"
+          echo "PR #$existing already open for $SAFE_BRANCH; branch updated"
         else
           gh pr create \
             --base "$DEFAULT_BRANCH" \
-            --head "$FOSSIER_TRUST_BRANCH" \
-            --title "$FOSSIER_TRUST_PR_TITLE" \
-            --body "$FOSSIER_TRUST_PR_BODY"
+            --head "$SAFE_BRANCH" \
+            --title "$SAFE_PR_TITLE" \
+            --body "$SAFE_PR_BODY"
         fi

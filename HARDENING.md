@@ -8,33 +8,29 @@
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
-**Harden Agent Version:** `1`
+**Harden Agent Version:** `2`
 
-Action **PThorpe92--fossier/v0.0.3** was hardened automatically. 2 finding(s) were identified and resolved across 1 iteration(s).
+Action **PThorpe92--fossier/v0.0.3** was hardened automatically. 2 finding(s) were identified and resolved across 2 iteration(s).
 
 ## Findings Fixed
 
 ### unpinned-uses (severity: high)
 
-Three `uses:` references in action.yml are pinned to mutable version tags instead of immutable 40-character commit SHAs, making the action vulnerable to supply-chain attacks if those tags are moved:
-- `astral-sh/setup-uv@v4` (line 51)
-- `actions/setup-python@v5` (line 54)
-- `actions/cache@v4` (line 61)
-Each should be replaced with a full SHA digest, e.g. `actions/cache@<40-hex-sha> # v4`.
+Three `uses:` references in action.yml use mutable version tags instead of pinned 40-character SHA commit hashes, making the action vulnerable to supply-chain attacks if the referenced tags are moved or overwritten: `astral-sh/setup-uv@v4` (line 54), `actions/setup-python@v5` (line 57), `actions/cache@v4` (line 66). Each should be pinned to a full SHA, e.g. `actions/cache@<40-hex-sha> # v4`.
 
 Locations:
 
-- `action.yml:51`
 - `action.yml:54`
-- `action.yml:61`
+- `action.yml:57`
+- `action.yml:66`
 
 ### script-injection (severity: high)
 
-Sub-rule (a): The 'Install fossier' step directly interpolates a `${{ ... }}` expression inside a `run:` shell command string: `run: uv pip install --system ${{ github.action_path }}`. Any `${{ ... }}` expression interpolated directly into a `run:` block is a script-injection risk because the value is substituted into the shell command string before the shell parses it. This should be replaced with the equivalent environment variable `$GITHUB_ACTION_PATH` (which GitHub Actions sets automatically), eliminating the template interpolation entirely.
+Sub-rule (a): The 'Install fossier' step directly interpolates a GitHub Actions expression `${{ github.action_path }}` inside a `run:` shell command string: `run: uv pip install --system ${{ github.action_path }}`. Any `${{ ... }}` expression interpolated directly into a `run:` block passes through YAML template substitution before the shell sees it, bypassing shell quoting and enabling script injection. The value should be passed via an `env:` variable and referenced as a quoted shell variable instead.
 
 Locations:
 
-- `action.yml:55`
+- `action.yml:63`
 
 ## Iteration Notes
 
@@ -44,5 +40,17 @@ Locations:
 
 **Notes:**
 
-Fixed all three unpinned `uses:` references by replacing mutable version tags with full 40-character commit SHAs (astral-sh/setup-uv@v4 → 38f3f104..., actions/setup-python@v5 → a26af69b..., actions/cache@v4 → 00578528...). Fixed the script injection on line 55 by replacing `${{ github.action_path }}` with the built-in `$GITHUB_ACTION_PATH` environment variable that GitHub Actions sets automatically, eliminating the template interpolation risk entirely.
+Pinned all three unpinned `uses:` references to full 40-character SHA hashes: `astral-sh/setup-uv@v4` → `38f3f104447c67c051c4a08e39b64a148898af3a`, `actions/setup-python@v5` → `a26af69be951a213d495a4c3e4e4022e16d87065`, `actions/cache@v4` → `0057852bfaa89a56745cba8c7296529d2fc39830`. Fixed script injection in the 'Install fossier' step by moving `${{ github.action_path }}` into an `env:` variable `ACTION_PATH` and referencing it as `"$ACTION_PATH"` in the shell command.
+
+### Iteration 2
+
+**Fixes applied:** github-env-injection, script-injection
+
+**Notes:**
+
+Fixed two related security findings:
+
+1. github-env-injection (comment_commands.py): Added `_sanitize_env_value()` helper that strips `\r` and `\n` characters. All four FOSSIER_TRUST_* values (branch, commit_msg, pr_title, pr_body) are now sanitized before being written to $GITHUB_ENV, preventing newline injection from attacker-controlled GitHub usernames.
+
+2. script-injection (action.yml): In the 'Open trust update PR' step, added shell-level sanitization using `printf '%s' "$VAR" | tr -d '\n\r'` for all four FOSSIER_TRUST_* variables before using them in git/gh commands. The sanitized SAFE_* variables are used throughout the step instead of the raw inherited env vars. This provides defense-in-depth alongside the Python-level fix.
 
