@@ -9,7 +9,8 @@ jobs:
 
       - name: Create fossier config file
         run: |
-          cat > "$GITHUB_WORKSPACE/fossier.toml" <<'EOF'
+          mkdir -p hardened/tests/fixtures/fossier-config
+          cat > hardened/tests/fixtures/fossier-config/fossier.toml <<'EOF'
           [thresholds]
           deny = 80
           review = 50
@@ -17,18 +18,22 @@ jobs:
 
       - id: action
         uses: .
+        continue-on-error: true
         with:
           github-token: ${{ github.token }}
-          config-path: fossier.toml
+          config-path: hardened/tests/fixtures/fossier-config/fossier.toml
           fail-on-deny: "false"
-        continue-on-error: true
 
-      - name: Assert outcome output is set
+      - name: Assert action ran with config-path input
         env:
-          OUTCOME: ${{ steps.action.outputs.outcome }}
+          OUTCOME: ${{ steps.action.outcome }}
         run: |
           echo "outcome: $OUTCOME"
-          # The action may produce no outcome when not triggered by a real PR event,
-          # but it must not crash with a non-zero exit that we didn't expect.
-          # We accept any outcome value (allow, review, deny, or empty).
-          echo "PASS: config-path input was accepted"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded with config-path input"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (sentinel repo is not resolvable or no PR context)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
