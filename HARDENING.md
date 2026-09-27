@@ -10,73 +10,35 @@
 
 **Harden Agent Version:** `2`
 
-Action **PThorpe92--fossier/v0.0.4** was hardened automatically. 3 finding(s) were identified and resolved across 1 iteration(s).
+Action **PThorpe92--fossier/v0.0.4** was hardened automatically. 2 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### unpinned-uses (severity: high)
 
-Multiple `uses:` references are pinned to mutable tags instead of immutable 40-character commit SHAs, making the action vulnerable to supply-chain attacks if the tag is moved.
-
-**action.yml:**
-- `astral-sh/setup-uv@v4`
-- `actions/setup-python@v5`
-- `actions/cache@v4`
-
-**ci.yml:**
-- `actions/checkout@v4`
-- `astral-sh/setup-uv@v4`
-
-**fossier-scan.yml:**
-- `actions/checkout@v4`
-- `astral-sh/setup-uv@v4`
-- `actions/setup-python@v5`
-- `actions/cache@v4`
-
-**fossier.yml:**
-- `actions/checkout@v4`
+Three `uses:` references in action.yml are pinned to mutable version tags instead of immutable 40-character SHA digests. If any of these tags are moved or the upstream repository is compromised, the action will silently execute attacker-controlled code. Failing references: `astral-sh/setup-uv@v4` (line 49), `actions/setup-python@v5` (line 53), `actions/cache@v4` (line 61).
 
 Locations:
 
 - `action.yml:49`
-- `action.yml:52`
-- `action.yml:60`
-- `.github/workflows/ci.yml:13`
-- `.github/workflows/ci.yml:16`
-- `.github/workflows/fossier-scan.yml:20`
-- `.github/workflows/fossier-scan.yml:23`
-- `.github/workflows/fossier-scan.yml:26`
-- `.github/workflows/fossier-scan.yml:32`
-- `.github/workflows/fossier.yml:14`
+- `action.yml:53`
+- `action.yml:61`
 
 ### script-injection (severity: high)
 
-GitHub Actions expressions (`${{ ... }}`) are interpolated directly inside `run:` shell command strings, violating sub-rule (a). Before the shell executes the command, the YAML template engine substitutes the expression value verbatim, allowing an attacker-controlled value to inject arbitrary shell commands.
-
-**action.yml** — `Install fossier` step: `run: uv pip install --system ${{ github.action_path }}`. The `github.action_path` context is substituted directly into the shell command without quoting or env-var indirection.
-
-**fossier-scan.yml** — `Scan open PRs` step: `if [ "${{ inputs.dry-run }}" = "true" ]`. The `inputs.dry-run` value (supplied by a `workflow_dispatch` caller) is interpolated directly into the shell `if` expression.
+Sub-rule (a): The 'Install fossier' run: block directly interpolates a GitHub Actions expression inside the shell command string: `run: uv pip install --system ${{ github.action_path }}`. Any `${{ ... }}` expression interpolated directly into a run: script is a script-injection risk because the value is substituted into the shell command before the shell parses it, bypassing shell quoting. Fix by passing the value via an env: variable and referencing it as a quoted shell variable: `env: ACTION_PATH: ${{ github.action_path }}` then `run: uv pip install --system "$ACTION_PATH"`.
 
 Locations:
 
 - `action.yml:57`
-- `.github/workflows/fossier-scan.yml:44`
-
-### missing-permissions (severity: medium)
-
-`.github/workflows/ci.yml` has no top-level `permissions:` key and its only job (`test`) also has no job-level `permissions:` key. Without explicit permissions, the workflow inherits the repository's default token permissions, which may be overly broad (e.g. `write` access to contents and pull-requests). A minimal `permissions: read-all` or specific scopes should be declared.
-
-Locations:
-
-- `.github/workflows/ci.yml:1`
 
 ## Iteration Notes
 
 ### Iteration 1
 
-**Fixes applied:** unpinned-uses, script-injection, missing-permissions
+**Fixes applied:** unpinned-uses, script-injection
 
 **Notes:**
 
-Fixed all three findings: (1) Pinned all mutable tag references to full 40-char commit SHAs in action.yml, ci.yml, fossier-scan.yml, and fossier.yml using lookup_action_sha for astral-sh/setup-uv@v4, actions/setup-python@v5, actions/cache@v4, and actions/checkout@v4. (2) Fixed script injection in action.yml by moving github.action_path into an ACTION_PATH env var, and in fossier-scan.yml by moving inputs.dry-run into a DRY_RUN env var. (3) Added top-level `permissions: contents: read` to ci.yml which had no permissions block.
+Fixed all three unpinned `uses:` references by resolving their mutable version tags to immutable 40-character SHA digests (astral-sh/setup-uv@v4 → 38f3f104..., actions/setup-python@v5 → a26af69b..., actions/cache@v4 → 0057852b...). Fixed the script-injection finding in the 'Install fossier' step by moving `${{ github.action_path }}` into an `env:` block as `ACTION_PATH` and referencing it as `"$ACTION_PATH"` in the shell command.
 
