@@ -69,7 +69,6 @@ def _signal_trust_change(
     env_file = os.environ.get("GITHUB_ENV")
     if not env_file:
         return
-    # Sanitize all values to prevent newline injection into $GITHUB_ENV.
     safe_branch = _sanitize_env_value(branch)
     safe_commit_msg = _sanitize_env_value(commit_msg)
     safe_pr_title = _sanitize_env_value(pr_title)

@@ -20,10 +20,10 @@ jobs:
         continue-on-error: true
         with:
           github-token: ${{ github.token }}
-          config-path: ${{ github.workspace }}/fossier.toml
+          config-path: fossier.toml
           fail-on-deny: "false"
 
-      - name: Assert action ran with config-path (success or graceful failure on sentinel repo)
+      - name: Assert action ran with config-path input
         env:
           OUTCOME: ${{ steps.action.outcome }}
           RESULT_OUTCOME: ${{ steps.action.outputs.outcome }}
