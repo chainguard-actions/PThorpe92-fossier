@@ -10,46 +10,57 @@
 
 **Harden Agent Version:** `2`
 
-Action **PThorpe92--fossier/v0.0.3** was hardened automatically. 3 finding(s) were identified and resolved across 1 iteration(s).
+Action **PThorpe92--fossier/v0.0.3** was hardened automatically. 2 finding(s) were identified and resolved across 2 iteration(s).
 
 ## Findings Fixed
 
-### script-injection (severity: high)
-
-Sub-rule (a): A ${{ }} expression is interpolated directly inside a run: shell command. The step 'Install fossier' uses `run: uv pip install --system ${{ github.action_path }}`, which injects the github.action_path context value directly into the shell command string before the shell ever sees it. Any expression inside ${{ }} in a run: block is a script-injection risk regardless of which context it reads from.
-
-Locations:
-
-- `action.yml:55`
-
 ### unpinned-uses (severity: high)
 
-Three uses: references in action.yml use mutable version tags instead of immutable 40-character SHA digests, making the action vulnerable to supply-chain attacks if those tags are moved: `astral-sh/setup-uv@v4` (line 47), `actions/setup-python@v5` (line 50), `actions/cache@v4` (line 58).
+Three `uses:` references in action.yml use mutable version tags instead of pinned 40-character SHA digests, making the action vulnerable to supply-chain attacks if those tags are moved:
+- `astral-sh/setup-uv@v4` (line 51)
+- `actions/setup-python@v5` (line 54)
+- `actions/cache@v4` (line 63)
+These should be pinned to their full commit SHAs.
 
 Locations:
 
-- `action.yml:47`
-- `action.yml:50`
-- `action.yml:58`
+- `action.yml:51`
+- `action.yml:54`
+- `action.yml:63`
 
-### github-env-injection (severity: high)
+### script-injection (severity: high)
 
-The Python helper `_signal_trust_change` in comment_commands.py writes values derived from GitHub event data directly to $GITHUB_ENV without newline sanitization. The `branch`, `commit_msg`, `pr_title`, and `pr_body` arguments all incorporate attacker-controlled data: `pr_author` (the PR author's GitHub username), `self.commenter` (the comment author's username), `self.pr_number`, and `reason` (free-text from the comment body). These are written with bare f-strings such as `f.write(f"FOSSIER_TRUST_BRANCH={branch}\n")` with no `printf '%s' ... | tr -d '\n\r'` sanitization, allowing a malicious actor to inject additional environment variable definitions by embedding newlines in a username or comment body.
+Rule (a) violation: The 'Install fossier' step directly interpolates a GitHub Actions expression inside a `run:` shell command string. The expression `${{ github.action_path }}` is substituted into the shell command before the shell ever sees it, allowing template injection if the value contains shell metacharacters.
+
+Offending line:
+  `run: uv pip install --system ${{ github.action_path }}`
+
+Fix: move the value into an `env:` variable and reference it as a quoted shell variable:
+```yaml
+env:
+  ACTION_PATH: ${{ github.action_path }}
+run: uv pip install --system "$ACTION_PATH"
+```
 
 Locations:
 
-- `src/fossier/comment_commands.py:65`
-- `src/fossier/comment_commands.py:66`
-- `src/fossier/comment_commands.py:67`
-- `src/fossier/comment_commands.py:68`
+- `action.yml:60`
 
 ## Iteration Notes
 
 ### Iteration 1
 
-**Fixes applied:** unpinned-uses, script-injection, github-env-injection
+**Fixes applied:** unpinned-uses, script-injection
 
 **Notes:**
 
-1. Pinned astral-sh/setup-uv@v4 → @38f3f104447c67c051c4a08e39b64a148898af3a # v4; actions/setup-python@v5 → @a26af69be951a213d495a4c3e4e4022e16d87065 # v5; actions/cache@v4 → @0057852bfaa89a56745cba8c7296529d2fc39830 # v4 in action.yml. 2. Moved ${{ github.action_path }} out of the run: shell string into an env: block as ACTION_PATH, referenced as "$ACTION_PATH" in the shell command. 3. Added _sanitize_env_value() helper in comment_commands.py that strips \r and \n characters, and applied it to all four values (branch, commit_msg, pr_title, pr_body) before writing to $GITHUB_ENV to prevent newline injection attacks.
+Pinned all three unpinned `uses:` references to their full 40-character commit SHAs (astral-sh/setup-uv@v4 → 38f3f104..., actions/setup-python@v5 → a26af69b..., actions/cache@v4 → 00578528...) with the original tag preserved as a comment. Fixed the script injection in the 'Install fossier' step by moving `${{ github.action_path }}` into an `env:` block as `ACTION_PATH` and referencing it as `"$ACTION_PATH"` in the shell command.
+
+### Iteration 2
+
+**Fixes applied:** github-env-injection
+
+**Notes:**
+
+Added a `_sanitize_env_value()` helper in `src/fossier/comment_commands.py` that strips `\r` and `\n` characters from values before they are written to `$GITHUB_ENV`. The `_signal_trust_change()` function now sanitizes all four user-controlled values (`branch`, `commit_msg`, `pr_title`, `pr_body`) through this helper prior to writing, preventing newline injection attacks that could overwrite sensitive environment variables consumed by subsequent workflow steps.
 

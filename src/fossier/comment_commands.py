@@ -53,7 +53,11 @@ def is_authorized(api: GitHubAPI, owner: str, repo: str, username: str) -> bool:
 
 
 def _sanitize_env_value(value: str) -> str:
-    """Strip newline and carriage-return characters to prevent GITHUB_ENV injection."""
+    """Strip newline and carriage-return characters from a value before it is
+    written to $GITHUB_ENV.  A malicious actor could embed a newline in a
+    username or free-text reason to inject additional KEY=VALUE pairs into the
+    environment file, potentially overwriting variables consumed by later steps.
+    """
     return value.replace("\r", "").replace("\n", "")
 
 

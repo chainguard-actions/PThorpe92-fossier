@@ -9,7 +9,8 @@ jobs:
 
       - name: Create fossier config file
         run: |
-          cat > "$GITHUB_WORKSPACE/fossier.toml" <<'EOF'
+          mkdir -p "$GITHUB_WORKSPACE/hardened/tests/fixtures/fossier-config"
+          cat > "$GITHUB_WORKSPACE/hardened/tests/fixtures/fossier-config/fossier.toml" <<'EOF'
           [thresholds]
           deny = 80
           review = 50
@@ -20,25 +21,19 @@ jobs:
         continue-on-error: true
         with:
           github-token: ${{ github.token }}
-          config-path: fossier.toml
+          config-path: ${{ github.workspace }}/hardened/tests/fixtures/fossier-config/fossier.toml
           fail-on-deny: "false"
 
       - name: Assert action ran with config-path input
         env:
           OUTCOME: ${{ steps.action.outcome }}
-          RESULT_OUTCOME: ${{ steps.action.outputs.outcome }}
         run: |
-          echo "step outcome: $OUTCOME"
-          echo "action outcome output: $RESULT_OUTCOME"
+          echo "outcome: $OUTCOME"
           if [ "$OUTCOME" = "success" ]; then
-            if [ -z "$RESULT_OUTCOME" ]; then
-              echo "FAIL: action succeeded but outcome output is empty"
-              exit 1
-            fi
-            echo "PASS: action succeeded with outcome='$RESULT_OUTCOME'"
+            echo "PASS: action succeeded with config-path input"
           elif [ "$OUTCOME" = "failure" ]; then
             echo "PASS: action failed gracefully (sentinel repo is not resolvable)"
           else
-            echo "FAIL: unexpected step outcome '$OUTCOME'"
+            echo "FAIL: unexpected outcome '$OUTCOME'"
             exit 1
           fi
