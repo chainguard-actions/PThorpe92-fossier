@@ -52,15 +52,6 @@ def is_authorized(api: GitHubAPI, owner: str, repo: str, username: str) -> bool:
     return username.lower() in collaborators
 
 
-def _sanitize_env_value(value: str) -> str:
-    """Strip newline and carriage-return characters from a value before it is
-    written to $GITHUB_ENV.  A malicious actor could embed a newline in a
-    username or free-text reason to inject additional KEY=VALUE pairs into the
-    environment file, potentially overwriting variables consumed by later steps.
-    """
-    return value.replace("\r", "").replace("\n", "")
-
-
 def _signal_trust_change(
     branch: str, commit_msg: str, pr_title: str, pr_body: str
 ) -> None:
@@ -73,16 +64,12 @@ def _signal_trust_change(
     env_file = os.environ.get("GITHUB_ENV")
     if not env_file:
         return
-    safe_branch = _sanitize_env_value(branch)
-    safe_commit_msg = _sanitize_env_value(commit_msg)
-    safe_pr_title = _sanitize_env_value(pr_title)
-    safe_pr_body = _sanitize_env_value(pr_body)
     with open(env_file, "a") as f:
         f.write("FOSSIER_TRUST_CHANGED=true\n")
-        f.write(f"FOSSIER_TRUST_BRANCH={safe_branch}\n")
-        f.write(f"FOSSIER_TRUST_COMMIT_MSG={safe_commit_msg}\n")
-        f.write(f"FOSSIER_TRUST_PR_TITLE={safe_pr_title}\n")
-        f.write(f"FOSSIER_TRUST_PR_BODY={safe_pr_body}\n")
+        f.write(f"FOSSIER_TRUST_BRANCH={branch}\n")
+        f.write(f"FOSSIER_TRUST_COMMIT_MSG={commit_msg}\n")
+        f.write(f"FOSSIER_TRUST_PR_TITLE={pr_title}\n")
+        f.write(f"FOSSIER_TRUST_PR_BODY={pr_body}\n")
 
 
 def _delete_registry_report(

@@ -10,41 +10,27 @@
 
 **Harden Agent Version:** `2`
 
-Action **PThorpe92--fossier/v0.0.3** was hardened automatically. 2 finding(s) were identified and resolved across 2 iteration(s).
+Action **PThorpe92--fossier/v0.0.3** was hardened automatically. 2 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### unpinned-uses (severity: high)
 
-Three `uses:` references in action.yml use mutable version tags instead of pinned 40-character SHA digests, making the action vulnerable to supply-chain attacks if those tags are moved:
-- `astral-sh/setup-uv@v4` (line 51)
-- `actions/setup-python@v5` (line 54)
-- `actions/cache@v4` (line 63)
-These should be pinned to their full commit SHAs.
+Three `uses:` references in action.yml use mutable version tags instead of pinned full-length SHA commit digests, making the action vulnerable to supply-chain attacks if the upstream tag is moved or compromised: `astral-sh/setup-uv@v4`, `actions/setup-python@v5`, and `actions/cache@v4`. Each should be pinned to a 40-character hex SHA (e.g. `actions/cache@1bd1e32a3bdc45362d1ceec05375cc4a7f3ba8b # v4`).
 
 Locations:
 
-- `action.yml:51`
 - `action.yml:54`
-- `action.yml:63`
+- `action.yml:57`
+- `action.yml:66`
 
 ### script-injection (severity: high)
 
-Rule (a) violation: The 'Install fossier' step directly interpolates a GitHub Actions expression inside a `run:` shell command string. The expression `${{ github.action_path }}` is substituted into the shell command before the shell ever sees it, allowing template injection if the value contains shell metacharacters.
-
-Offending line:
-  `run: uv pip install --system ${{ github.action_path }}`
-
-Fix: move the value into an `env:` variable and reference it as a quoted shell variable:
-```yaml
-env:
-  ACTION_PATH: ${{ github.action_path }}
-run: uv pip install --system "$ACTION_PATH"
-```
+Rule (a) violation: The 'Install fossier' step interpolates a `${{ }}` expression directly inside a `run:` shell command string: `run: uv pip install --system ${{ github.action_path }}`. Any `${{ ... }}` expression directly inside a `run:` block is subject to YAML template substitution before the shell ever sees it, making it a script-injection risk. The value should be passed via an `env:` variable and referenced as `$ACTION_PATH` (or equivalent) inside the script.
 
 Locations:
 
-- `action.yml:60`
+- `action.yml:63`
 
 ## Iteration Notes
 
@@ -54,13 +40,5 @@ Locations:
 
 **Notes:**
 
-Pinned all three unpinned `uses:` references to their full 40-character commit SHAs (astral-sh/setup-uv@v4 → 38f3f104..., actions/setup-python@v5 → a26af69b..., actions/cache@v4 → 00578528...) with the original tag preserved as a comment. Fixed the script injection in the 'Install fossier' step by moving `${{ github.action_path }}` into an `env:` block as `ACTION_PATH` and referencing it as `"$ACTION_PATH"` in the shell command.
-
-### Iteration 2
-
-**Fixes applied:** github-env-injection
-
-**Notes:**
-
-Added a `_sanitize_env_value()` helper in `src/fossier/comment_commands.py` that strips `\r` and `\n` characters from values before they are written to `$GITHUB_ENV`. The `_signal_trust_change()` function now sanitizes all four user-controlled values (`branch`, `commit_msg`, `pr_title`, `pr_body`) through this helper prior to writing, preventing newline injection attacks that could overwrite sensitive environment variables consumed by subsequent workflow steps.
+Pinned all three unpinned `uses:` references to full 40-character SHA digests with tag comments: `astral-sh/setup-uv@v4` → `38f3f104447c67c051c4a08e39b64a148898af3a`, `actions/setup-python@v5` → `a26af69be951a213d495a4c3e4e4022e16d87065`, `actions/cache@v4` → `0057852bfaa89a56745cba8c7296529d2fc39830`. Fixed script injection in the 'Install fossier' step by moving `${{ github.action_path }}` into an `env:` block as `ACTION_PATH` and referencing it as `"$ACTION_PATH"` in the shell command.
 
