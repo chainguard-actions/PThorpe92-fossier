@@ -14,31 +14,23 @@ Action **PThorpe92--fossier/v0.0.5** was hardened automatically. 2 finding(s) we
 
 ## Findings Fixed
 
-### unpinned-uses (severity: high)
-
-Three `uses:` references in action.yml use mutable version tags instead of pinned 40-character commit SHAs, making the action vulnerable to supply-chain attacks if those tags are moved:
-- `astral-sh/setup-uv@v4` (line 54)
-- `actions/setup-python@v5` (line 57)
-- `actions/cache@v4` (line 66)
-Each should be pinned to a full SHA digest, e.g. `actions/checkout@<40-hex-char-sha> # v4`.
-
-Locations:
-
-- `action.yml:54`
-- `action.yml:57`
-- `action.yml:66`
-
 ### script-injection (severity: high)
 
-Sub-rule (a): A `${{ ... }}` expression is interpolated directly inside a `run:` shell command string. In the "Install fossier" step, `${{ github.action_path }}` is embedded directly in the shell command:
-
-  run: uv pip install --system ${{ github.action_path }}
-
-GitHub Actions performs YAML template substitution before the shell ever sees the string, so the value is inserted unquoted into the shell command. Even though `github.action_path` is not directly attacker-controlled, any `${{ ... }}` expression inside a `run:` block is a script-injection finding per the check rules. The fix is to pass the value via an `env:` variable and reference it as a quoted shell variable: `run: uv pip install --system "$ACTION_PATH"` with `env: ACTION_PATH: ${{ github.action_path }}`.
+Sub-rule (a): A ${{ }} expression is directly interpolated inside a run: shell command string. The step 'Install fossier' contains: `run: uv pip install --system ${{ github.action_path }}`. Even though github.action_path is not directly attacker-controlled, any ${{ ... }} expression inside a run: block is a script-injection finding because the value flows through YAML template substitution before the shell ever sees it, bypassing shell quoting. The value should be passed via an env: variable instead (e.g., `env: ACTION_PATH: ${{ github.action_path }}` and then `run: uv pip install --system "$ACTION_PATH"`).
 
 Locations:
 
-- `action.yml:63`
+- `action.yml:57`
+
+### unpinned-uses (severity: high)
+
+Three uses: references in action.yml are pinned to mutable version tags rather than immutable 40-character commit SHAs, making the action vulnerable to supply-chain attacks if any of those tags are moved or compromised. Failing references: (1) `uses: astral-sh/setup-uv@v4` — should be pinned to a full SHA; (2) `uses: actions/setup-python@v5` — should be pinned to a full SHA; (3) `uses: actions/cache@v4` — should be pinned to a full SHA.
+
+Locations:
+
+- `action.yml:48`
+- `action.yml:51`
+- `action.yml:60`
 
 ## Iteration Notes
 
@@ -48,5 +40,5 @@ Locations:
 
 **Notes:**
 
-Pinned all three unpinned action references to full 40-character commit SHAs (astral-sh/setup-uv@v4→38f3f104..., actions/setup-python@v5→a26af69b..., actions/cache@v4→00578528...) with tag comments for readability. Fixed script injection in the 'Install fossier' step by moving ${{ github.action_path }} into an env: block as ACTION_PATH and referencing it as "$ACTION_PATH" in the run: command.
+Fixed all three unpinned `uses:` references by pinning them to their full 40-character commit SHAs (astral-sh/setup-uv@38f3f10, actions/setup-python@a26af69, actions/cache@0057852), preserving the version tag in a comment. Fixed the script-injection finding in the 'Install fossier' step by moving `${{ github.action_path }}` into an `env:` block as `ACTION_PATH` and referencing it as `"$ACTION_PATH"` in the shell command.
 
