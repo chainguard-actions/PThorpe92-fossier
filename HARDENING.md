@@ -4,19 +4,19 @@
 
 > This file was generated automatically by the hardening agent.
 
-**Policy SHA:** `d636be7e43ef829af6e853da6b3c7566db9f72fe`
+**Policy SHA:** `374911c4be584df24e6da57af2d990570ef0f859`
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
 **Harden Agent Version:** `2`
 
-Action **PThorpe92--fossier/v0.0.3** was hardened automatically. 2 finding(s) were identified and resolved across 1 iteration(s).
+Action **PThorpe92--fossier/v0.0.3** was hardened automatically. 3 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### unpinned-uses (severity: high)
 
-Three `uses:` references in action.yml use mutable version tags instead of pinned full-length SHA commit digests, making the action vulnerable to supply-chain attacks if the upstream tag is moved or compromised: `astral-sh/setup-uv@v4`, `actions/setup-python@v5`, and `actions/cache@v4`. Each should be pinned to a 40-character hex SHA (e.g. `actions/cache@1bd1e32a3bdc45362d1ceec05375cc4a7f3ba8b # v4`).
+action.yml has composite steps whose uses: refs are mutable tags, not 40-character commit SHAs: 'uses: astral-sh/setup-uv@v4', 'uses: actions/setup-python@v5', 'uses: actions/cache@v4'.
 
 Locations:
 
@@ -26,19 +26,92 @@ Locations:
 
 ### script-injection (severity: high)
 
-Rule (a) violation: The 'Install fossier' step interpolates a `${{ }}` expression directly inside a `run:` shell command string: `run: uv pip install --system ${{ github.action_path }}`. Any `${{ ... }}` expression directly inside a `run:` block is subject to YAML template substitution before the shell ever sees it, making it a script-injection risk. The value should be passed via an `env:` variable and referenced as `$ACTION_PATH` (or equivalent) inside the script.
+Sub-rule (a): a GitHub Actions expression is put straight into the run: script of the 'Install fossier' step: 'run: uv pip install --system ${{ github.action_path }}'. Move it into an env: variable (or use the existing $GITHUB_ACTION_PATH variable) and double-quote it: uv pip install --system "$GITHUB_ACTION_PATH".
 
 Locations:
 
 - `action.yml:63`
 
+### prior-fix (severity: high)
+
+Carried forward from this version's previous harden, which fixed it; fix it again unless the code no longer has the problem. The previous harden changed action.yml without recording a finding for it, and this analysis reported nothing there. Re-apply its security changes unless the code no longer needs them. The previous patch:
+```diff
+diff --git a/action.yml b/action.yml
+index a42c166..6ce083b 100644
+--- a/action.yml
++++ b/action.yml
+@@ -3,7 +3,6 @@ description: "Evaluate pull request contributors for spam probability"
+ branding:
+   icon: "shield"
+   color: "orange"
+-
+ inputs:
+   github-token:
+     description: "GitHub token with PR write access"
+@@ -32,7 +31,6 @@ inputs:
+     description: "Custom registry URL (default: https://registry.fossier.io)"
+     required: false
+     default: ""
+-
+ outputs:
+   outcome:
+     description: "Decision outcome: allow, review, or deny"
+@@ -46,30 +44,44 @@ outputs:
+   details:
+     description: "Full decision details as JSON"
+     value: ${{ steps.evaluate.outputs.details }}
+-
+ runs:
+   using: "composite"
+   steps:
+     - name: Set up uv
+       uses: astral-sh/setup-uv@v4
+-
+     - name: Set up Python
+       uses: actions/setup-python@v5
+       with:
+         python-version: "3.13"
+-
+     - name: Install fossier
+       shell: bash
+-      run: uv pip install --system ${{ github.action_path }}
+-
++      env:
++        ACTION_PATH: ${{ github.action_path }}
++      run: uv pip install --system "$ACTION_PATH"
+     - name: Restore DB cache
+       uses: actions/cache@v4
+       with:
+         path: .fossier.db
+         key: ${{ inputs.db-cache-key }}-${{ github.repository }}
+         restore-keys: |
+           ${{ inputs.db-cache-key }}-${{ github.repository }}
+-
+     - name: Evaluate PR
+       id: evaluate
+       shell: bash
+@@ -89,7 +101,6 @@ runs:
+           exit 1
+         fi
+         exit 0
+-
+     - name: Open trust update PR
+       if: env.FOSSIER_TRUST_CHANGED == 'true'
+       shell: bash
+
+```
+
+Locations:
+
+- `action.yml`
+
 ## Iteration Notes
 
 ### Iteration 1
 
-**Fixes applied:** unpinned-uses, script-injection
+**Fixes applied:** unpinned-uses, script-injection, prior-fix
 
 **Notes:**
 
-Pinned all three unpinned `uses:` references to full 40-character SHA digests with tag comments: `astral-sh/setup-uv@v4` → `38f3f104447c67c051c4a08e39b64a148898af3a`, `actions/setup-python@v5` → `a26af69be951a213d495a4c3e4e4022e16d87065`, `actions/cache@v4` → `0057852bfaa89a56745cba8c7296529d2fc39830`. Fixed script injection in the 'Install fossier' step by moving `${{ github.action_path }}` into an `env:` block as `ACTION_PATH` and referencing it as `"$ACTION_PATH"` in the shell command.
+Pinned setup-uv, setup-python and cache to full commit SHAs, each with its tag kept in a trailing comment. In the Install fossier step, github.action_path now comes in through the step's env: as ACTION_PATH and is passed double-quoted. That is the same change the previous harden made.
 

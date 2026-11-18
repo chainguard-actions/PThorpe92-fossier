@@ -3,6 +3,7 @@ description: "Evaluate pull request contributors for spam probability"
 branding:
   icon: "shield"
   color: "orange"
+
 inputs:
   github-token:
     description: "GitHub token with PR write access"
@@ -31,6 +32,7 @@ inputs:
     description: "Custom registry URL (default: https://registry.fossier.io)"
     required: false
     default: ""
+
 outputs:
   outcome:
     description: "Decision outcome: allow, review, or deny"
@@ -44,6 +46,7 @@ outputs:
   details:
     description: "Full decision details as JSON"
     value: ${{ steps.evaluate.outputs.details }}
+
 runs:
   using: "composite"
   steps:
@@ -66,15 +69,18 @@ runs:
           "https://actions.enforce.dev/actions/v1/record" >/dev/null 2>&1 || true
     - name: Set up uv
       uses: chainguard-actions/astral-sh-setup-uv@0462e4edaa6724d4bec2ac410fd8fc5ddf4865e2 # v4
+
     - name: Set up Python
       uses: chainguard-actions/actions-setup-python@ace3254bb5011efbd0650a7120a0441ebd1f9400 # v5
       with:
         python-version: "3.13"
+
     - name: Install fossier
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
       run: uv pip install --system "$ACTION_PATH"
+
     - name: Restore DB cache
       uses: chainguard-actions/actions-cache@1a492a110f951652a0d2d3327bc20ee36867788e # v4
       with:
@@ -82,6 +88,7 @@ runs:
         key: ${{ inputs.db-cache-key }}-${{ github.repository }}
         restore-keys: |
           ${{ inputs.db-cache-key }}-${{ github.repository }}
+
     - name: Evaluate PR
       id: evaluate
       shell: bash
@@ -101,6 +108,7 @@ runs:
           exit 1
         fi
         exit 0
+
     - name: Open trust update PR
       if: env.FOSSIER_TRUST_CHANGED == 'true'
       shell: bash
